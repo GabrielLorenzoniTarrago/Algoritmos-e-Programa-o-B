@@ -1,0 +1,21 @@
+#include <stdio.h>
+#include <stdlib.h>
+#define TAM=5
+main(){
+    printf("exemplo de vetor de numeros inteiros");
+    int numero;
+    int vetor[TAM];
+
+    or(int i=0;i< TAM;i++){
+        printf( "digite um numero inteiro");
+        scanf("%d", &numero)
+
+        vetor[i]= numero;
+    }
+
+    printf("numeros:");
+    for()
+
+    return 1;
+
+}
