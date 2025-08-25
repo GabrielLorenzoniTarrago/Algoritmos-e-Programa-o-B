@@ -1,0 +1,74 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+int main() {
+    vector<int> dadosGlicemicos;
+    int opcao;
+
+    do {
+        cout << "-- Menu Principal --";
+        cout << "1 Cadastrar dados Glicemicos (45 a 450)";
+        cout << "2 Mostrar Dados glicemicos";
+        cout << "3 Calcular e exibir Media";
+        cout << "4 Calcular e Exibir mediana";
+        cout << "5 Sair do Programa";
+        cout << "Opcao ";
+        cin >> opcao;
+
+        if (opcao == 1) {
+            int valor;
+            cout << "Digite um Valor glicemico: ";
+            while (true) {
+                cin >> valor;
+                if (valor == 0) break;
+                if (valor >= 45 && valor <= 450) {
+                    dadosGlicemicos.push_back(valor);
+                } else {
+                    cout << "Valor Invalido! Digite Novamente: ";
+                }
+            }
+        } 
+        else if (opcao == 2) {
+            cout << "Valores glicemicos cadastados: ";
+            for (int v : dadosGlicemicos) {
+                cout << v << " ";
+            }
+            cout << endl;
+        } 
+        else if (opcao == 3) {
+            if (!dadosGlicemicos.empty()) {
+                double soma = 0;
+                for (int v : dadosGlicemicos) soma += v;
+                double media = soma / dadosGlicemicos.size();
+                cout << "Media glicemica: " << media << endl;
+            } else {
+                cout << "Nenhum valor Cadastrado!";
+            }
+        } 
+        else if (opcao == 4) {
+            if (!dadosGlicemicos.empty()) {
+                sort(dadosGlicemicos.begin(), dadosGlicemicos.end());
+                double mediana;
+                int n = dadosGlicemicos.size();
+                if (n % 2 == 0)
+                    mediana = (dadosGlicemicos[n/2 - 1] + dadosGlicemicos[n/2]) / 2.0;
+                else
+                    mediana = dadosGlicemicos[n/2];
+                cout << "Mediana Glicemica: " << mediana << endl;
+            } else {
+                cout << "Nenhum valor cadastrado!";
+            }
+        } 
+        else if (opcao == 5) {
+            cout << "Saindo do Programa";
+        } 
+        else {
+            cout << "Opcao invalida! Tente Novamente.";
+        }
+
+    } while (opcao != 5);
+
+    return 0;
+}
