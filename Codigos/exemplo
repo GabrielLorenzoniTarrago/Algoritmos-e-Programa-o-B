@@ -1,0 +1,477 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+// ====== Modelos ======
+enum class Sintoma {
+    Febre = 1,
+    Tosse,
+    DorMuscular,
+    Coriza,
+    FaltaAr,
+    DorGarganta,
+    NauseaVomito,
+    Diarreia,
+    PerdaOlfato,
+    PerdaPaladar,
+    Cefaleia
+};
+
+static const vector<pair<int,string>> SINTOMAS_MENU = {
+    { (int)Sintoma::Febre,         "Febre" },
+    { (int)Sintoma::Tosse,         "Tosse" },
+    { (int)Sintoma::DorMuscular,   "Dores musculares" },
+    { (int)Sintoma::Coriza,        "Coriza" },
+    { (int)Sintoma::FaltaAr,       "Falta de ar" },
+    { (int)Sintoma::DorGarganta,   "Dor de garganta" },
+    { (int)Sintoma::NauseaVomito,  "Náusea/Vômito" },
+    { (int)Sintoma::Diarreia,      "Diarreia" },
+    { (int)Sintoma::PerdaOlfato,   "Perda de olfato" },
+    { (int)Sintoma::PerdaPaladar,  "Perda de paladar" },
+    { (int)Sintoma::Cefaleia,      "Cefaleia (dor de cabeça)" }
+};
+
+struct Paciente {
+    int id;
+    string nome;
+    char sexo;              // 'M', 'F' ou 'O'
+    string dataNascimento;  // dd/mm/aaaa (string simples para facilitar)
+    double altura;          // metros
+    double peso;            // kg
+};
+
+struct Unidade {
+    int id;
+    string nome;
+    string endereco;
+};
+
+struct Profissional {
+    int id;
+    string nome;
+    string conselho; // CRM/COREN/etc
+    string registro; // número do conselho
+    string cargo;    // médico, enfermeiro, etc.
+    int unidadeId;   // vínculo
+};
+
+struct TabelaPontuacao {
+    // Pontos por sintoma
+    map<Sintoma, int> pontos;
+    // Limiar de classificação (você pode ajustar conforme a tabela do professor)
+    // Ex.: score <= limiarVerde => "Verde"; <= limiarAmarelo => "Amarelo"; <= limiarVermelho => "Vermelho"; > limiarVermelho => "Vermelho+"
+    int limiarVerde   = 2;
+    int limiarAmarelo = 5;
+    int limiarVermelho= 8;
+};
+
+struct Triagem {
+    int id;
+    int pacienteId;
+    int profissionalId;
+    int unidadeId;
+    string dataHora;
+    vector<Sintoma> sintomas;
+    int pontuacao;
+    string urgencia; // Verde / Amarelo / Vermelho / Vermelho+
+};
+
+// ====== Util ======
+string trim(const string& s) {
+    string t = s;
+    // left
+    t.erase(t.begin(), find_if(t.begin(), t.end(), [](unsigned char ch){ return !isspace(ch); }));
+    // right
+    t.erase(find_if(t.rbegin(), t.rend(), [](unsigned char ch){ return !isspace(ch); }).base(), t.end());
+    return t;
+}
+
+int lerInt(const string& prompt, int minv = INT_MIN, int maxv = INT_MAX) {
+    while (true) {
+        cout << prompt;
+        string line; getline(cin, line);
+        stringstream ss(line);
+        int v; if (ss >> v && v >= minv && v <= maxv) return v;
+        cout << "Entrada inválida. Tente novamente.\n";
+    }
+}
+
+double lerDouble(const string& prompt, double minv = -1e18, double maxv = 1e18) {
+    while (true) {
+        cout << prompt;
+        string line; getline(cin, line);
+        stringstream ss(line);
+        double v; if (ss >> v && v >= minv && v <= maxv) return v;
+        cout << "Entrada inválida. Tente novamente.\n";
+    }
+}
+
+string lerNaoVazio(const string& prompt) {
+    while (true) {
+        cout << prompt;
+        string s; getline(cin, s);
+        s = trim(s);
+        if (!s.empty()) return s;
+        cout << "Campo obrigatório. Tente novamente.\n";
+    }
+}
+
+char lerSexo() {
+    while (true) {
+        cout << "Sexo [M/F/O]: ";
+        string s; getline(cin, s);
+        if (s.size() == 0) continue;
+        char c = toupper(s[0]);
+        if (c=='M' || c=='F' || c=='O') return c;
+        cout << "Valor inválido. Use M, F ou O.\n";
+    }
+}
+
+string agoraTexto() {
+    time_t t = time(nullptr);
+    tm *lt = localtime(&t);
+    char buf[64];
+    strftime(buf, sizeof(buf), "%d/%m/%Y %H:%M:%S", lt);
+    return string(buf);
+}
+
+double calcIMC(double peso, double altura) {
+    if (altura <= 0) return 0.0;
+    return peso / (altura * altura);
+}
+
+// ====== Banco de dados em memória ======
+struct DB {
+    vector<Paciente> pacientes;
+    vector<Unidade> unidades;
+    vector<Profissional> profissionais;
+    vector<Triagem> triagens;
+    TabelaPontuacao tabela;
+
+    int nextPacienteId = 1;
+    int nextUnidadeId = 1;
+    int nextProfId = 1;
+    int nextTriagemId = 1;
+
+    Paciente* getPaciente(int id) {
+        for (auto& p : pacientes) if (p.id == id) return &p;
+        return nullptr;
+    }
+    Unidade* getUnidade(int id) {
+        for (auto& u : unidades) if (u.id == id) return &u;
+        return nullptr;
+    }
+    Profissional* getProf(int id) {
+        for (auto& pr : profissionais) if (pr.id == id) return &pr;
+        return nullptr;
+    }
+} db;
+
+// ====== Impressões ======
+void listarPacientes() {
+    if (db.pacientes.empty()) { cout << "Nenhum paciente cadastrado.\n"; return; }
+    cout << "\n--- Pacientes ---\n";
+    for (const auto& p : db.pacientes) {
+        cout << "ID: " << p.id
+             << " | Nome: " << p.nome
+             << " | Sexo: " << p.sexo
+             << " | Nasc.: " << p.dataNascimento
+             << " | Altura(m): " << p.altura
+             << " | Peso(kg): " << p.peso
+             << " | IMC: " << fixed << setprecision(1) << calcIMC(p.peso,p.altura)
+             << "\n";
+    }
+}
+
+void listarUnidades() {
+    if (db.unidades.empty()) { cout << "Nenhuma unidade cadastrada.\n"; return; }
+    cout << "\n--- Unidades ---\n";
+    for (const auto& u : db.unidades) {
+        cout << "ID: " << u.id << " | " << u.nome << " | End.: " << u.endereco << "\n";
+    }
+}
+
+void listarProfissionais() {
+    if (db.profissionais.empty()) { cout << "Nenhum profissional cadastrado.\n"; return; }
+    cout << "\n--- Profissionais ---\n";
+    for (const auto& pr : db.profissionais) {
+        cout << "ID: " << pr.id
+             << " | Nome: " << pr.nome
+             << " | Conselho: " << pr.conselho
+             << " | Registro: " << pr.registro
+             << " | Cargo: " << pr.cargo
+             << " | UnidadeID: " << pr.unidadeId
+             << "\n";
+    }
+}
+
+string nomeSintoma(Sintoma s) {
+    for (auto& it : SINTOMAS_MENU) if (it.first == (int)s) return it.second;
+    return "?";
+}
+
+void mostrarTabelaPontuacao() {
+    cout << "\n--- Tabela de Pontuação (ajuste conforme a tabela do professor) ---\n";
+    for (auto& it : SINTOMAS_MENU) {
+        Sintoma s = (Sintoma)it.first;
+        int pts = 0;
+        if (db.tabela.pontos.count(s)) pts = db.tabela.pontos[s];
+        cout << setw(2) << it.first << ") " << setw(20) << left << it.second << " -> " << pts << " pts\n";
+    }
+    cout << "Limiar Verde: "    << db.tabela.limiarVerde
+         << " | Amarelo: "      << db.tabela.limiarAmarelo
+         << " | Vermelho: "     << db.tabela.limiarVermelho << "\n";
+}
+
+// ====== Ações ======
+void cadastrarPaciente() {
+    cout << "\n== Cadastrar Paciente ==\n";
+    Paciente p;
+    p.id = db.nextPacienteId++;
+    p.nome = lerNaoVazio("Nome: ");
+    p.sexo = lerSexo();
+    p.dataNascimento = lerNaoVazio("Data de nascimento (dd/mm/aaaa): ");
+    p.altura = lerDouble("Altura (m): ", 0.3, 2.8);
+    p.peso   = lerDouble("Peso (kg): ", 1.0, 500.0);
+    db.pacientes.push_back(p);
+    cout << "Paciente cadastrado com ID " << p.id << ".\n";
+}
+
+void cadastrarUnidade() {
+    cout << "\n== Cadastrar Unidade ==\n";
+    Unidade u;
+    u.id = db.nextUnidadeId++;
+    u.nome = lerNaoVazio("Nome da unidade: ");
+    u.endereco = lerNaoVazio("Endereço: ");
+    db.unidades.push_back(u);
+    cout << "Unidade cadastrada com ID " << u.id << ".\n";
+}
+
+void cadastrarProfissional() {
+    if (db.unidades.empty()) {
+        cout << "Cadastre ao menos 1 unidade antes de cadastrar profissionais.\n";
+        return;
+    }
+    cout << "\n== Cadastrar Profissional ==\n";
+    Profissional pr;
+    pr.id = db.nextProfId++;
+    pr.nome = lerNaoVazio("Nome: ");
+    pr.conselho = lerNaoVazio("Conselho (CRM/COREN/etc): ");
+    pr.registro = lerNaoVazio("Registro (nº no conselho): ");
+    pr.cargo = lerNaoVazio("Cargo (médico/enfermeiro/etc): ");
+    listarUnidades();
+    pr.unidadeId = lerInt("ID da unidade onde atua: ");
+    if (!db.getUnidade(pr.unidadeId)) {
+        cout << "Unidade não encontrada. Cancelando cadastro.\n";
+        return;
+    }
+    db.profissionais.push_back(pr);
+    cout << "Profissional cadastrado com ID " << pr.id << ".\n";
+}
+
+void configurarTabelaPontuacao() {
+    cout << "\n== Configurar Tabela de Pontuação ==\n";
+    mostrarTabelaPontuacao();
+    cout << "1) Alterar pontos por sintoma\n";
+    cout << "2) Alterar limiares (Verde/Amarelo/Vermelho)\n";
+    cout << "0) Voltar\n";
+    int op = lerInt("Opção: ", 0, 2);
+    if (op == 1) {
+        cout << "Digite os pontos de cada sintoma (inteiro, pode ser 0):\n";
+        for (auto& it : SINTOMAS_MENU) {
+            int v = lerInt(" - " + it.second + ": ");
+            db.tabela.pontos[(Sintoma)it.first] = v;
+        }
+        cout << "Pontos atualizados.\n";
+    } else if (op == 2) {
+        int v = lerInt("Limiar Verde (<=): ");
+        int a = lerInt("Limiar Amarelo (<=): ");
+        int r = lerInt("Limiar Vermelho (<=): ");
+        if (!(v <= a && a <= r)) {
+            cout << "Ordem inválida: precisa ser Verde <= Amarelo <= Vermelho. Mantendo valores anteriores.\n";
+        } else {
+            db.tabela.limiarVerde = v;
+            db.tabela.limiarAmarelo = a;
+            db.tabela.limiarVermelho = r;
+            cout << "Limiares atualizados.\n";
+        }
+    }
+    mostrarTabelaPontuacao();
+}
+
+vector<Sintoma> selecionarSintomas() {
+    vector<Sintoma> escolhidos;
+    cout << "\n== Seleção de Sintomas ==\n";
+    cout << "Digite os números separados por espaço e pressione ENTER.\n";
+    cout << "Ex.: 1 3 5 (ou deixe vazio para nenhum)\n";
+    for (auto& it : SINTOMAS_MENU) {
+        cout << setw(2) << it.first << ") " << it.second << "\n";
+    }
+    cout << "Sua seleção: ";
+    string line; getline(cin, line);
+    stringstream ss(line);
+    int x;
+    set<int> vistos;
+    while (ss >> x) {
+        if (vistos.count(x)) continue;
+        vistos.insert(x);
+        for (auto& it : SINTOMAS_MENU) {
+            if (it.first == x) {
+                escolhidos.push_back((Sintoma)x);
+                break;
+            }
+        }
+    }
+    return escolhidos;
+}
+
+int calcularPontuacao(const vector<Sintoma>& sintomas) {
+    int total = 0;
+    for (auto s : sintomas) {
+        auto it = db.tabela.pontos.find(s);
+        total += (it == db.tabela.pontos.end() ? 0 : it->second);
+    }
+    return total;
+}
+
+string classificarUrgencia(int score, const TabelaPontuacao& tab) {
+    if (score <= tab.limiarVerde)   return "Verde (baixa prioridade)";
+    if (score <= tab.limiarAmarelo) return "Amarelo (prioridade moderada)";
+    if (score <= tab.limiarVermelho)return "Vermelho (alta prioridade)";
+    return "Vermelho+ (emergência)";
+}
+
+void realizarTriagem() {
+    if (db.pacientes.empty()) { cout << "Cadastre ao menos 1 paciente.\n"; return; }
+    if (db.profissionais.empty()) { cout << "Cadastre ao menos 1 profissional.\n"; return; }
+    if (db.unidades.empty()) { cout << "Cadastre ao menos 1 unidade.\n"; return; }
+
+    cout << "\n== Realizar Triagem ==\n";
+    listarPacientes();
+    int pid = lerInt("Informe o ID do paciente: ");
+    auto* pac = db.getPaciente(pid);
+    if (!pac) { cout << "Paciente não encontrado.\n"; return; }
+
+    listarProfissionais();
+    int profId = lerInt("Informe o ID do profissional responsável: ");
+    auto* prof = db.getProf(profId);
+    if (!prof) { cout << "Profissional não encontrado.\n"; return; }
+
+    listarUnidades();
+    int unId = lerInt("Informe o ID da unidade de atendimento: ");
+    auto* uni = db.getUnidade(unId);
+    if (!uni) { cout << "Unidade não encontrada.\n"; return; }
+
+    auto sintomas = selecionarSintomas();
+    int score = calcularPontuacao(sintomas);
+    string urg = classificarUrgencia(score, db.tabela);
+
+    Triagem t;
+    t.id = db.nextTriagemId++;
+    t.pacienteId = pid;
+    t.profissionalId = profId;
+    t.unidadeId = unId;
+    t.dataHora = agoraTexto();
+    t.sintomas = move(sintomas);
+    t.pontuacao = score;
+    t.urgencia = urg;
+    db.triagens.push_back(t);
+
+    cout << "\n--- Resultado da Triagem ---\n";
+    cout << "Paciente: " << pac->nome << " (IMC: " << fixed << setprecision(1) << calcIMC(pac->peso,pac->altura) << ")\n";
+    cout << "Profissional: " << prof->nome << " | Unidade: " << uni->nome << "\n";
+    cout << "Data/Hora: " << t.dataHora << "\n";
+    cout << "Sintomas: ";
+    if (t.sintomas.empty()) cout << "Nenhum";
+    else {
+        for (size_t i = 0; i < t.sintomas.size(); ++i) {
+            cout << nomeSintoma(t.sintomas[i]);
+            if (i + 1 < t.sintomas.size()) cout << ", ";
+        }
+    }
+    cout << "\nPontuação total: " << t.pontuacao << "\n";
+    cout << "Urgência: " << t.urgencia << "\n";
+}
+
+void listarTriagens() {
+    if (db.triagens.empty()) { cout << "Nenhuma triagem registrada.\n"; return; }
+    cout << "\n--- Triagens ---\n";
+    for (const auto& t : db.triagens) {
+        auto* p = db.getPaciente(t.pacienteId);
+        auto* pr = db.getProf(t.profissionalId);
+        auto* u = db.getUnidade(t.unidadeId);
+        cout << "ID: " << t.id
+             << " | Paciente: " << (p ? p->nome : "?")
+             << " | Prof.: " << (pr ? pr->nome : "?")
+             << " | Unidade: " << (u ? u->nome : "?")
+             << " | Data/Hora: " << t.dataHora
+             << " | Pontos: " << t.pontuacao
+             << " | Urg.: " << t.urgencia
+             << "\n";
+    }
+}
+
+// ====== Defaults ======
+void preencherPontuacaoPadrao() {
+    // valores padrão (exemplos). Ajuste conforme a tabela do professor:
+    db.tabela.pontos[Sintoma::Febre]         = 2;
+    db.tabela.pontos[Sintoma::Tosse]         = 1;
+    db.tabela.pontos[Sintoma::DorMuscular]   = 1;
+    db.tabela.pontos[Sintoma::Coriza]        = 1;
+    db.tabela.pontos[Sintoma::FaltaAr]       = 4;
+    db.tabela.pontos[Sintoma::DorGarganta]   = 1;
+    db.tabela.pontos[Sintoma::NauseaVomito]  = 2;
+    db.tabela.pontos[Sintoma::Diarreia]      = 2;
+    db.tabela.pontos[Sintoma::PerdaOlfato]   = 3;
+    db.tabela.pontos[Sintoma::PerdaPaladar]  = 3;
+    db.tabela.pontos[Sintoma::Cefaleia]      = 1;
+
+    db.tabela.limiarVerde = 2;
+    db.tabela.limiarAmarelo = 5;
+    db.tabela.limiarVermelho = 8;
+}
+
+// ====== Menu ======
+void menu() {
+    cout << "\n=========== SISTEMA DE TRIAGEM COVID (C++) ===========\n";
+    cout << "1) Cadastrar paciente\n";
+    cout << "2) Listar pacientes\n";
+    cout << "3) Cadastrar unidade\n";
+    cout << "4) Listar unidades\n";
+    cout << "5) Cadastrar profissional\n";
+    cout << "6) Listar profissionais\n";
+    cout << "7) Configurar tabela de pontuação\n";
+    cout << "8) Realizar triagem de paciente\n";
+    cout << "9) Listar triagens\n";
+    cout << "0) Sair\n";
+}
+
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    preencherPontuacaoPadrao();
+
+    while (true) {
+        menu();
+        int op = lerInt("Escolha: ", 0, 9);
+        if (op == 0) {
+            cout << "Saindo...\n";
+            break;
+        }
+        switch (op) {
+            case 1: cadastrarPaciente(); break;
+            case 2: listarPacientes(); break;
+            case 3: cadastrarUnidade(); break;
+            case 4: listarUnidades(); break;
+            case 5: cadastrarProfissional(); break;
+            case 6: listarProfissionais(); break;
+            case 7: configurarTabelaPontuacao(); break;
+            case 8: realizarTriagem(); break;
+            case 9: listarTriagens(); break;
+            default: cout << "Opção inválida.\n"; break;
+        }
+        cout << "\nPressione ENTER para continuar..."; 
+        string dummy; getline(cin, dummy);
+    }
+    return 0;
+}
