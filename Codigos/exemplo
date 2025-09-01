@@ -6,7 +6,6 @@
 
 using namespace std;
 
-// ============ ESTRUTURAS ============
 
 struct Paciente {
     int id;
@@ -26,13 +25,11 @@ struct Triagem {
     string dataHora;
 };
 
-// ============ VARIÁVEIS GLOBAIS ============
 vector<Paciente> pacientes;
 vector<Triagem> triagens;
 int proximoIdPaciente = 1;
 int proximoIdTriagem = 1;
 
-// ============ SINTOMAS ============
 string sintomas[11] = {
     "Febre",
     "Tosse",
@@ -61,7 +58,6 @@ int pontuacoes[11] = {
     1  // Cefaleia
 };
 
-// ============ FUNÇÕES AUXILIARES ============
 
 string dataHoraAtual() {
     time_t agora = time(0);
@@ -78,7 +74,6 @@ string classificarUrgencia(int pontos) {
     else return "Vermelho+";
 }
 
-// ============ FUNÇÕES DO SISTEMA ============
 
 void cadastrarPaciente() {
     Paciente p;
@@ -216,7 +211,6 @@ void listarTriagens() {
     }
 }
 
-// ============ MENU ============
 
 void menu() {
     cout << "\n===== MENU PRINCIPAL =====\n";
@@ -228,7 +222,6 @@ void menu() {
     cout << "Escolha uma opção: ";
 }
 
-// ============ PROGRAMA PRINCIPAL ============
 
 int main() {
     int opcao;
